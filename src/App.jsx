@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Phone, Users, Package, MessageSquare, Plus, Search, Send, Loader2, CheckCircle, AlertCircle, X, Upload } from 'lucide-react';
+import { Phone, Users, Package, MessageSquare, Plus, Loader2, CheckCircle, AlertCircle, X, TrendingDown, TrendingUp } from 'lucide-react';
 
 const PhoneShopManager = () => {
   const [activeTab, setActiveTab] = useState('sale');
@@ -65,7 +66,9 @@ const PhoneShopManager = () => {
           },
           shop: {
             name: n8nConfig.shopName,
-            location: n8nConfig.location
+            location: n8nConfig.location,
+            inquiryNumber: n8nConfig.inquiryNumber,
+            whatsappGroup: n8nConfig.whatsappGroup
           }
         };
 
@@ -79,7 +82,7 @@ const PhoneShopManager = () => {
           const result = await response.json();
           setStatus({ 
             type: 'success', 
-            message: `✅ Sale recorded! ${result.receiptNumber ? `Receipt #${result.receiptNumber}` : ''}\n${result.message || 'Customer will receive WhatsApp message shortly.'}` 
+            message: `✅ Sale recorded! ${result.receiptNumber ? `Receipt #${result.receiptNumber}` : ''}\n${result.message || 'Customer will receive WhatsApp message shortly.\nInventory automatically updated!'}`
           });
           setFormData({
             customerName: '',
@@ -163,8 +166,10 @@ const PhoneShopManager = () => {
               <option value="cash">Cash</option>
               <option value="mpesa">M-Pesa</option>
               <option value="bank">Bank Transfer</option>
+              <option value="installment">Installment</option>
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Sales Person *</label>
             <input
@@ -188,7 +193,7 @@ const PhoneShopManager = () => {
                 Processing...
               </>
             ) : (
-              'Record Sale'
+              'Record Sale & Send Thank You Message'
             )}
           </button>
         </div>
@@ -211,24 +216,45 @@ const PhoneShopManager = () => {
             </p>
           </div>
         )}
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="font-semibold text-blue-900 mb-2">🎯 What Happens Next</h3>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li>✅ Customer receives personalized WhatsApp thank you message</li>
+            <li>✅ Sale recorded in Google Sheets</li>
+            <li>✅ Inventory automatically updated</li>
+            <li>✅ Customer added to WhatsApp group</li>
+            <li>✅ Receipt generated and emailed</li>
+          </ul>
+        </div>
       </div>
     );
   };
 
   const InventoryManager = () => {
+    const [actionType, setActionType] = useState('add_stock');
     const [formData, setFormData] = useState({
+      productId: '',
       model: '',
       brand: '',
       quantity: '',
-      price: ''
+      price: '',
+      minimumStock: '5'
     });
     const [status, setStatus] = useState({ type: '', message: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleAddPhone = async () => {
-      if (!formData.model || !formData.brand || !formData.quantity || !formData.price) {
-        setStatus({ type: 'error', message: 'Please fill in all fields' });
-        return;
+    const handleInventoryAction = async () => {
+      if (actionType === 'new_product') {
+        if (!formData.model || !formData.brand || !formData.quantity || !formData.price) {
+          setStatus({ type: 'error', message: 'Please fill in all fields for new product' });
+          return;
+        }
+      } else {
+        if (!formData.productId || !formData.quantity) {
+          setStatus({ type: 'error', message: 'Please select product and enter quantity' });
+          return;
+        }
       }
 
       if (!n8nConfig.webhookUrl) {
@@ -241,12 +267,16 @@ const PhoneShopManager = () => {
 
       try {
         const inventoryData = {
-          action: 'add_inventory',
+          action: 'inventory_added',
+          actionType: actionType,
           timestamp: new Date().toISOString(),
-          item: {
-            ...formData,
+          data: {
+            productId: formData.productId || undefined,
+            brand: formData.brand || undefined,
+            model: formData.model || undefined,
             quantity: parseInt(formData.quantity),
-            price: parseFloat(formData.price)
+            price: formData.price ? parseFloat(formData.price) : undefined,
+            minimumStock: formData.minimumStock ? parseInt(formData.minimumStock) : 5
           },
           shop: {
             name: n8nConfig.shopName,
@@ -261,13 +291,32 @@ const PhoneShopManager = () => {
         });
 
         if (response.ok) {
-          setStatus({ 
-            type: 'success', 
-            message: `✅ ${formData.brand} ${formData.model} added to inventory!` 
+          const result = await response.json();
+          let message = '';
+          
+          if (actionType === 'add_stock') {
+            message = `✅ Stock added successfully!\n${result.message || `${formData.quantity} units added to inventory.`}`;
+          } else if (actionType === 'sale') {
+            message = `✅ Sale recorded!\n${result.message || `Stock reduced by ${formData.quantity} units.`}`;
+          } else {
+            message = `✅ New product added!\n${result.message || `${formData.brand} ${formData.model} added to inventory.`}`;
+          }
+
+          if (result.lowStockAlert) {
+            message += `\n⚠️ LOW STOCK ALERT: Current stock is below minimum!`;
+          }
+
+          setStatus({ type: 'success', message });
+          setFormData({
+            productId: '',
+            model: '',
+            brand: '',
+            quantity: '',
+            price: '',
+            minimumStock: '5'
           });
-          setFormData({ model: '', brand: '', quantity: '', price: '' });
         } else {
-          setStatus({ type: 'error', message: 'Failed to add inventory. Please check your n8n webhook.' });
+          setStatus({ type: 'error', message: 'Failed to update inventory. Please check your n8n webhook.' });
         }
       } catch (error) {
         setStatus({ type: 'error', message: `Error: ${error.message}` });
@@ -280,67 +329,156 @@ const PhoneShopManager = () => {
       <div className="space-y-4">
         <h2 className="text-2xl font-bold text-gray-800">Inventory Management</h2>
 
-        <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-              <input
-                type="text"
-                value={formData.brand}
-                onChange={(e) => setFormData({...formData, brand: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Samsung"
-                disabled={isSubmitting}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-              <input
-                type="text"
-                value={formData.model}
-                onChange={(e) => setFormData({...formData, model: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Galaxy S23"
-                disabled={isSubmitting}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-              <input
-                type="number"
-                value={formData.quantity}
-                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="10"
-                disabled={isSubmitting}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Price (KES)</label>
-              <input
-                type="number"
-                value={formData.price}
-                onChange={(e) => setFormData({...formData, price: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="45000"
-                disabled={isSubmitting}
-              />
-            </div>
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Action Type</label>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => setActionType('add_stock')}
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                actionType === 'add_stock'
+                  ? 'border-green-500 bg-green-50 text-green-700'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              <TrendingUp size={18} />
+              <span className="font-medium text-sm">Add Stock</span>
+            </button>
+            <button
+              onClick={() => setActionType('sale')}
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                actionType === 'sale'
+                  ? 'border-red-500 bg-red-50 text-red-700'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              <TrendingDown size={18} />
+              <span className="font-medium text-sm">Record Sale</span>
+            </button>
+            <button
+              onClick={() => setActionType('new_product')}
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                actionType === 'new_product'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              <Plus size={18} />
+              <span className="font-medium text-sm">New Product</span>
+            </button>
           </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          {actionType === 'new_product' ? (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Brand *</label>
+                  <input
+                    type="text"
+                    value={formData.brand}
+                    onChange={(e) => setFormData({...formData, brand: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Samsung"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Model *</label>
+                  <input
+                    type="text"
+                    value={formData.model}
+                    onChange={(e) => setFormData({...formData, model: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Galaxy S23"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Initial Quantity *</label>
+                  <input
+                    type="number"
+                    value={formData.quantity}
+                    onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="10"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Price (KES) *</label>
+                  <input
+                    type="number"
+                    value={formData.price}
+                    onChange={(e) => setFormData({...formData, price: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="45000"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Stock Alert Level *</label>
+                <input
+                  type="number"
+                  value={formData.minimumStock}
+                  onChange={(e) => setFormData({...formData, minimumStock: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="5"
+                  disabled={isSubmitting}
+                />
+                <p className="text-xs text-gray-500 mt-1">You'll receive an alert when stock falls below this level</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product ID *</label>
+                <input
+                  type="text"
+                  value={formData.productId}
+                  onChange={(e) => setFormData({...formData, productId: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="PROD-001"
+                  disabled={isSubmitting}
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter the Product ID from your inventory sheet</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {actionType === 'add_stock' ? 'Quantity to Add *' : 'Quantity Sold *'}
+                </label>
+                <input
+                  type="number"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="5"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </>
+          )}
+
           <button
-            onClick={handleAddPhone}
+            onClick={handleInventoryAction}
             disabled={isSubmitting}
-            className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className={`flex items-center justify-center gap-2 w-full py-2 px-4 rounded-md transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed text-white ${
+              actionType === 'add_stock' ? 'bg-green-600 hover:bg-green-700' :
+              actionType === 'sale' ? 'bg-red-600 hover:bg-red-700' :
+              'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {isSubmitting ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Adding...
+                Processing...
               </>
             ) : (
               <>
-                <Plus size={16} />
-                Add to Inventory
+                {actionType === 'add_stock' && <><TrendingUp size={16} /> Add Stock</>}
+                {actionType === 'sale' && <><TrendingDown size={16} /> Record Sale</>}
+                {actionType === 'new_product' && <><Plus size={16} /> Add New Product</>}
               </>
             )}
           </button>
@@ -357,7 +495,7 @@ const PhoneShopManager = () => {
             ) : (
               <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
             )}
-            <p className={`text-sm ${
+            <p className={`text-sm whitespace-pre-wrap ${
               status.type === 'success' ? 'text-green-800' : 'text-red-800'
             }`}>
               {status.message}
@@ -365,15 +503,19 @@ const PhoneShopManager = () => {
           </div>
         )}
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
-            💡 <strong>Tip:</strong> Inventory is managed by n8n. Your workflow will handle stock tracking, low-stock alerts, and automatic updates.
-          </p>
-        </div>
+        {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="font-semibold text-blue-900 mb-2">💡 How Inventory Works</h3>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li>✅ <strong>Add Stock:</strong> Increases inventory when new phones arrive</li>
+            <li>✅ <strong>Record Sale:</strong> Decreases inventory (or use "New Sale" tab for full workflow)</li>
+            <li>✅ <strong>New Product:</strong> Adds a new phone model to your catalog</li>
+            <li>✅ <strong>Auto Alerts:</strong> n8n sends alerts when stock is low</li>
+            <li>✅ <strong>Sales Integration:</strong> Sales from "New Sale" automatically update inventory</li>
+          </ul>
+        </div> */}
       </div>
     );
   };
-
   const OfferBroadcast = () => {
     const [offerData, setOfferData] = useState({
       phoneModel: '',
@@ -384,6 +526,7 @@ const PhoneShopManager = () => {
     });
     const [status, setStatus] = useState({ type: '', message: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
+
     const handleImageUpload = (e) => {
       const files = Array.from(e.target.files);
       const imagePromises = files.map(file => {
@@ -394,19 +537,21 @@ const PhoneShopManager = () => {
               name: file.name,
               data: reader.result,
               type: file.type
-           });
-         };
-         reader.readAsDataURL(file);
-         });
-     });
-    Promise.all(imagePromises).then(images => {
-      setOfferData({...offerData, images: [...offerData.images, ...images]});
-    });
- };
-   const removeImage = (index) => {
-     const newImages = offerData.images.filter((_, i) => i !== index);
-     setOfferData({...offerData, images: newImages});
-   };
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      });
+
+      Promise.all(imagePromises).then(images => {
+        setOfferData({...offerData, images: [...offerData.images, ...images]});
+      });
+    };
+
+    const removeImage = (index) => {
+      const newImages = offerData.images.filter((_, i) => i !== index);
+      setOfferData({...offerData, images: newImages});
+    };
 
     const handleSendOffer = async () => {
       if (!offerData.phoneModel || !offerData.price) {
@@ -432,7 +577,8 @@ const PhoneShopManager = () => {
           },
           shop: {
             name: n8nConfig.shopName,
-            location: n8nConfig.location
+            location: n8nConfig.location,
+            inquiryNumber: n8nConfig.inquiryNumber
           }
         };
 
@@ -467,11 +613,11 @@ const PhoneShopManager = () => {
 
     return (
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-gray-800">Create Offer</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Create Promotional Offer</h2>
 
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Model</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Model *</label>
             <input
               type="text"
               value={offerData.phoneModel}
@@ -483,7 +629,7 @@ const PhoneShopManager = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Price (KES)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Price (KES) *</label>
             <input
               type="number"
               value={offerData.price}
@@ -502,9 +648,10 @@ const PhoneShopManager = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
             >
-              <option value="new-arrival">New Arrival</option>
-              <option value="discount">Special Discount</option>
-              <option value="featured">Featured Deal</option>
+              <option value="new-arrival">🆕 New Arrival</option>
+              <option value="discount">💰 Special Discount</option>
+              <option value="featured">⭐ Featured Deal</option>
+              <option value="flash-sale">⚡ Flash Sale</option>
             </select>
           </div>
 
@@ -514,11 +661,13 @@ const PhoneShopManager = () => {
               value={offerData.features}
               onChange={(e) => setOfferData({...offerData, features: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="256GB Storage, 6.7&quot; Display, 48MP Camera"
+              placeholder="256GB Storage, 6.7&quot; Display, 48MP Camera, 5G Ready"
               rows="4"
               disabled={isSubmitting}
             />
+            <p className="text-xs text-gray-500 mt-1">AI will use these features to generate an engaging promotional message</p>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone Images (optional)</label>
             <input
@@ -529,7 +678,7 @@ const PhoneShopManager = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
             />
-            <p className="text-xs text-gray-500 mt-1">Upload images of the phone</p>
+            <p className="text-xs text-gray-500 mt-1">Upload product images to include in the broadcast</p>
             
             {offerData.images.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
