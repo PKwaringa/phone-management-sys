@@ -4,6 +4,7 @@ import './index.css'  // ← This line is CRITICAL
 import App from './App.jsx'
 import './storagePolyfill.js'
 
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />

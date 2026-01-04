@@ -1,20 +1,50 @@
 
 import React, { useState, useEffect } from 'react';
-import { Phone, Users, Package, MessageSquare, Plus, Loader2, CheckCircle, AlertCircle, X, TrendingDown, TrendingUp } from 'lucide-react';
+import { Phone, Users, Package, MessageSquare, Plus, Loader2, CheckCircle, AlertCircle, X, TrendingDown, TrendingUp, ShoppingCart, Lock, Mail, Eye, EyeOff, UserPlus, LogIn } from 'lucide-react';
+
+// SHA-256 hash function for password encryption
+const hashPassword = async (password) => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hash));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
 
 const PhoneShopManager = () => {
+  const [currentView, setCurrentView] = useState('landing');
   const [activeTab, setActiveTab] = useState('sale');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [n8nConfig, setN8nConfig] = useState({
-    webhookUrl: '',
+    webhookUrl: import.meta.env.VITE_N8N_WEBHOOK_URL,
     shopName: 'Tech Mobile Store',
     location: 'Murang\'a, Kenya',
     inquiryNumber: '+254712345678',
-    whatsappGroup: 'https://chat.whatsapp.com/your-group-link'
+    whatsappGroup: 'https://chat.whatsapp.com/your-group-link',
+    orderFormUrl: 'https://forms.google.com/your-form-link'
   });
 
   useEffect(() => {
     loadConfig();
+    checkAuthStatus();
   }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const authData = await window.storage.get('phone-shop-auth');
+      if (authData) {
+        const auth = JSON.parse(authData.value);
+        if (auth.isAuthenticated && auth.user) {
+          setIsAuthenticated(true);
+          setCurrentUser(auth.user);
+          setCurrentView('app');
+        }
+      }
+    } catch (error) {
+      console.log('No auth session found');
+    }
+  };
 
   const loadConfig = async () => {
     try {
@@ -30,7 +60,442 @@ const PhoneShopManager = () => {
     await window.storage.set('n8n-config', JSON.stringify(config));
   };
 
-  const SaleForm = () => {
+  const logout = async () => {
+    await window.storage.delete('phone-shop-auth');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setCurrentView('landing');
+  };
+
+  // ===== LANDING PAGE COMPONENT =====
+  const LandingPage = () => {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800">
+        <div className="container mx-auto px-4 py-8">
+          <nav className="flex justify-between items-center mb-16">
+            <div className="flex items-center gap-3">
+              <div className="bg-white p-2 rounded-lg">
+                <Phone className="text-blue-600" size={32} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">{n8nConfig.shopName}</h1>
+                <p className="text-blue-200 text-sm">{n8nConfig.location}</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCurrentView('login')}
+                className="flex items-center gap-2 px-6 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+              >
+                <LogIn size={18} />
+                Staff Login
+              </button>
+            </div>
+          </nav>
+
+          <div className="text-center mb-16">
+            <h2 className="text-5xl md:text-6xl font-bold text-white mb-6">
+              Premium Smartphones<br />at Unbeatable Prices
+            </h2>
+            <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+              Your trusted destination for the latest phones, genuine products, and exceptional customer service
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => window.open(n8nConfig.orderFormUrl, '_blank')}
+                className="flex items-center justify-center gap-2 px-8 py-4 bg-white text-blue-600 rounded-lg font-bold text-lg hover:bg-blue-50 transition-all transform hover:scale-105 shadow-xl"
+              >
+                <ShoppingCart size={24} />
+                Order Online Now
+              </button>
+              <a
+                href={`tel:${n8nConfig.inquiryNumber}`}
+                className="flex items-center justify-center gap-2 px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg font-bold text-lg hover:bg-white hover:text-blue-600 transition-all"
+              >
+                <Phone size={24} />
+                Call Us: {n8nConfig.inquiryNumber}
+              </a>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 mb-16">
+            <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-6 text-white border border-white border-opacity-20">
+              <div className="bg-blue-500 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <CheckCircle size={24} />
+              </div>
+              <h3 className="text-xl font-bold mb-2">100% Genuine Products</h3>
+              <p className="text-blue-100">All phones are authentic with manufacturer warranty</p>
+            </div>
+            <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-6 text-white border border-white border-opacity-20">
+              <div className="bg-green-500 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Package size={24} />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Fast Delivery</h3>
+              <p className="text-blue-100">Quick delivery across Kenya within 24-48 hours</p>
+            </div>
+            <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-6 text-white border border-white border-opacity-20">
+              <div className="bg-purple-500 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Users size={24} />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Expert Support</h3>
+              <p className="text-blue-100">Dedicated customer service and after-sales support</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-8 text-center shadow-2xl">
+            <h3 className="text-3xl font-bold text-gray-800 mb-4">Join Our WhatsApp Community</h3>
+            <p className="text-gray-600 mb-6">Get instant updates on new arrivals, exclusive deals, and special offers</p>
+            <a
+              href={n8nConfig.whatsappGroup}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-8 py-3 bg-green-500 text-white rounded-lg font-bold text-lg hover:bg-green-600 transition-colors"
+            >
+              <MessageSquare size={24} />
+              Join WhatsApp Group
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ===== AUTH PAGE COMPONENT (Login & Signup) =====
+  const AuthPage = ({ mode }) => {
+    const [formData, setFormData] = useState({
+      email: '',
+      password: '',
+      confirmPassword: '',
+      fullName: '',
+      phoneNumber: ''
+    });
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [status, setStatus] = useState({ type: '', message: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [passwordStrength, setPasswordStrength] = useState({ score: 0, message: '', color: '' });
+
+    const validatePassword = (password) => {
+      let score = 0;
+      let message = '';
+      let color = '';
+
+      if (password.length < 8) {
+        return { score: 0, message: 'Password must be at least 8 characters', color: 'text-red-600' };
+      }
+      
+      if (password.length >= 8) score++;
+      if (password.length >= 12) score++;
+      if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+      if (/\d/.test(password)) score++;
+      if (/[^a-zA-Z0-9]/.test(password)) score++;
+
+      if (score <= 2) {
+        message = 'Weak password';
+        color = 'text-red-600';
+      } else if (score <= 3) {
+        message = 'Moderate password';
+        color = 'text-yellow-600';
+      } else {
+        message = 'Strong password';
+        color = 'text-green-600';
+      }
+
+      return { score, message, color };
+    };
+
+    const handlePasswordChange = (value) => {
+      setFormData({...formData, password: value});
+      if (value) {
+        setPasswordStrength(validatePassword(value));
+      } else {
+        setPasswordStrength({ score: 0, message: '', color: '' });
+      }
+    };
+
+    const handleSubmit = async () => {
+      setStatus({ type: '', message: '' });
+
+      if (mode === 'signup') {
+        if (!formData.fullName || !formData.email || !formData.phoneNumber || !formData.password || !formData.confirmPassword) {
+          setStatus({ type: 'error', message: 'Please fill in all fields' });
+          return;
+        }
+
+        if (formData.password !== formData.confirmPassword) {
+          setStatus({ type: 'error', message: 'Passwords do not match' });
+          return;
+        }
+
+        const strength = validatePassword(formData.password);
+        if (strength.score < 2) {
+          setStatus({ type: 'error', message: 'Password is too weak. Use at least 8 characters with uppercase, lowercase, and numbers' });
+          return;
+        }
+      } else {
+        if (!formData.email || !formData.password) {
+          setStatus({ type: 'error', message: 'Please enter email and password' });
+          return;
+        }
+      }
+
+      if (!n8nConfig.webhookUrl) {
+        setStatus({ type: 'error', message: 'System configuration error. Please contact administrator.' });
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      try {
+        const hashedPassword = await hashPassword(formData.password);
+
+        const authData = {
+          action: mode === 'signup' ? 'signup_request' : 'login_request',
+          timestamp: new Date().toISOString(),
+          user: {
+            email: formData.email.toLowerCase().trim(),
+            passwordHash: hashedPassword,
+            ...(mode === 'signup' && {
+              fullName: formData.fullName,
+              phoneNumber: formData.phoneNumber
+            })
+          }
+        };
+
+        const response = await fetch(n8nConfig.webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(authData)
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (mode === 'signup') {
+            setStatus({ 
+              type: 'success', 
+              message: '✅ Account request submitted! You will receive an email once your account is approved by the administrator.' 
+            });
+            setFormData({
+              email: '',
+              password: '',
+              confirmPassword: '',
+              fullName: '',
+              phoneNumber: ''
+            });
+          } else {
+            if (result.success && result.user) {
+              await window.storage.set('phone-shop-auth', JSON.stringify({
+                isAuthenticated: true,
+                user: result.user,
+                timestamp: new Date().toISOString()
+              }));
+              
+              setCurrentUser(result.user);
+              setIsAuthenticated(true);
+              setCurrentView('app');
+            } else {
+              setStatus({ 
+                type: 'error', 
+                message: result.message || 'Invalid credentials or account not approved yet' 
+              });
+            }
+          }
+        } else {
+          setStatus({ type: 'error', message: 'Authentication failed. Please try again.' });
+        }
+      } catch (error) {
+        setStatus({ type: 'error', message: `Error: ${error.message}` });
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <button
+            onClick={() => setCurrentView('landing')}
+            className="mb-4 text-blue-600 hover:text-blue-700 flex items-center gap-2"
+          >
+            ← Back to Home
+          </button>
+
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="text-center mb-8">
+              <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                {mode === 'signup' ? <UserPlus className="text-white" size={32} /> : <Lock className="text-white" size={32} />}
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">
+                {mode === 'signup' ? 'Create Staff Account' : 'Staff Login'}
+              </h2>
+              <p className="text-gray-600 mt-2">
+                {mode === 'signup' ? 'Request access to the management system' : 'Access the management system'}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {mode === 'signup' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                    <input
+                      type="text"
+                      value={formData.fullName}
+                      onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="John Doe"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                    <input
+                      type="tel"
+                      value={formData.phoneNumber}
+                      onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="+254712345678"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3.5 text-gray-400" size={20} />
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="your.email@example.com"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3.5 text-gray-400" size={20} />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
+                    className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="••••••••"
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                {mode === 'signup' && passwordStrength.message && (
+                  <p className={`text-xs mt-1 ${passwordStrength.color}`}>
+                    {passwordStrength.message}
+                  </p>
+                )}
+                {mode === 'signup' && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Use 8+ characters with uppercase, lowercase, numbers, and symbols
+                  </p>
+                )}
+              </div>
+
+              {mode === 'signup' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password *</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3.5 text-gray-400" size={20} />
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                      className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="••••••••"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                    >
+                      {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  mode === 'signup' ? 'Request Account' : 'Login'
+                )}
+              </button>
+            </div>
+
+            {status.message && (
+              <div className={`mt-4 p-3 rounded-lg flex items-start gap-2 text-sm ${
+                status.type === 'success' 
+                  ? 'bg-green-50 border border-green-200 text-green-800' 
+                  : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+                {status.type === 'success' ? (
+                  <CheckCircle className="flex-shrink-0 mt-0.5" size={18} />
+                ) : (
+                  <AlertCircle className="flex-shrink-0 mt-0.5" size={18} />
+                )}
+                <p>{status.message}</p>
+              </div>
+            )}
+
+            <div className="mt-6 text-center">
+              {mode === 'signup' ? (
+                <p className="text-sm text-gray-600">
+                  Already have an account?{' '}
+                  <button
+                    onClick={() => setCurrentView('login')}
+                    className="text-blue-600 hover:text-blue-700 font-semibold"
+                  >
+                    Login here
+                  </button>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  Need an account?{' '}
+                  <button
+                    onClick={() => setCurrentView('signup')}
+                    className="text-blue-600 hover:text-blue-700 font-semibold"
+                  >
+                    Request access
+                  </button>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+   // ===== SaleForm PAGE COMPONENT  =====
+ const SaleForm = () => {
     const [formData, setFormData] = useState({
       customerName: '',
       phoneNumber: '',
@@ -217,20 +682,11 @@ const PhoneShopManager = () => {
           </div>
         )}
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">🎯 What Happens Next</h3>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>✅ Customer receives personalized WhatsApp thank you message</li>
-            <li>✅ Sale recorded in Google Sheets</li>
-            <li>✅ Inventory automatically updated</li>
-            <li>✅ Customer added to WhatsApp group</li>
-            <li>✅ Receipt generated and emailed</li>
-          </ul>
-        </div>
       </div>
     );
   };
 
+  // ===== InventoryManager PAGE COMPONENT  =====
   const InventoryManager = () => {
     const [actionType, setActionType] = useState('add_stock');
     const [formData, setFormData] = useState({
@@ -507,6 +963,8 @@ const PhoneShopManager = () => {
       </div>
     );
   };
+
+  // ===== OfferBroadcast PAGE COMPONENT  =====
   const OfferBroadcast = () => {
     const [offerData, setOfferData] = useState({
       phoneModel: '',
@@ -731,6 +1189,7 @@ const PhoneShopManager = () => {
     );
   };
 
+  // ===== CustomersList PAGE COMPONENT  =====
  const CustomersList = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchType, setSearchType] = useState('name');
@@ -892,7 +1351,7 @@ const PhoneShopManager = () => {
       </div>
     );
   };
-
+// ===== Settings PAGE COMPONENT  =====
   const Settings = () => {
     const [localConfig, setLocalConfig] = useState(n8nConfig);
     const [isSaving, setIsSaving] = useState(false);
@@ -915,21 +1374,8 @@ const PhoneShopManager = () => {
     return (
       <div className="space-y-4">
         <h2 className="text-2xl font-bold text-gray-800">Configuration</h2>
-
-
+        
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">n8n Webhook URL *</label>
-            <input
-              type="url"
-              value={localConfig.webhookUrl}
-              onChange={(e) => setLocalConfig({...localConfig, webhookUrl: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              placeholder="https://your-n8n-instance.com/webhook/phone-shop"
-            />
-            <p className="text-xs text-gray-500 mt-1">Your n8n webhook endpoint that will receive all data</p>
-          </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Shop Name</label>
             <input
@@ -949,6 +1395,7 @@ const PhoneShopManager = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number for Inquiries</label>
             <input
@@ -991,7 +1438,7 @@ const PhoneShopManager = () => {
         {saveStatus.message && (
           <div className={`p-4 rounded-lg flex items-start gap-3 ${
             saveStatus.type === 'success' 
-              ? 'bg-green-50 border border-green-200' 
+              ? 'bg-green-50 border border-green-200'
               : 'bg-red-50 border border-red-200'
           }`}>
             {saveStatus.type === 'success' ? (
@@ -1006,123 +1453,104 @@ const PhoneShopManager = () => {
             </p>
           </div>
         )}
-
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-3">n8n Workflow Setup Guide</h3>
-          <div className="space-y-3 text-sm text-gray-700">
-            <div className="flex gap-3">
-              <span className="font-bold text-blue-600">1.</span>
-              <p>Create a Webhook trigger node in n8n</p>
-            </div>
-            <div className="flex gap-3">
-              <span className="font-bold text-blue-600">2.</span>
-              <p>Add a Switch node to handle different actions: <code className="bg-gray-100 px-1 rounded">new_sale</code>, <code className="bg-gray-100 px-1 rounded">add_inventory</code>, <code className="bg-gray-100 px-1 rounded">broadcast_offer</code></p>
-            </div>
-            <div className="flex gap-3">
-              <span className="font-bold text-blue-600">3.</span>
-              <p>For <strong>new_sale</strong>: Add AI node → generate thank you message → WhatsApp node → Google Sheets/Database → Email receipt</p>
-            </div>
-            <div className="flex gap-3">
-              <span className="font-bold text-blue-600">4.</span>
-              <p>For <strong>add_inventory</strong>: Update Google Sheets/Database → Check stock levels → Send low-stock alerts if needed</p>
-            </div>
-            <div className="flex gap-3">
-              <span className="font-bold text-blue-600">5.</span>
-              <p>For <strong>broadcast_offer</strong>: AI node → generate marketing message → WhatsApp group broadcast</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-          <h3 className="font-semibold text-gray-800 mb-3">Expected Webhook Payload</h3>
-          <pre className="bg-white p-4 rounded border border-gray-300 overflow-x-auto text-xs">
-
-          </pre>
-        </div>
       </div>
     );
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-4xl mx-auto">
-      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-      <h1 className="text-3xl font-bold text-gray-800 mb-2">{n8nConfig.shopName}</h1>
-      <p className="text-gray-600">Phone Shop Management System</p>
-      {!n8nConfig.webhookUrl && (
-      <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded p-3">
-      <p className="text-sm text-yellow-800">⚠️ Please configure your n8n webhook URL in Settings</p>
-</div>
-)}
-</div>
-<div className="bg-white rounded-lg shadow-lg overflow-hidden">
-      <div className="flex border-b overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('sale')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
-            activeTab === 'sale'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <Phone size={20} />
-          New Sale
-        </button>
-        <button
-          onClick={() => setActiveTab('inventory')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
-            activeTab === 'inventory'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <Package size={20} />
-          Inventory
-        </button>
-        <button
-          onClick={() => setActiveTab('offers')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
-            activeTab === 'offers'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <MessageSquare size={20} />
-          Offers
-        </button>
-        <button
-          onClick={() => setActiveTab('customers')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
-            activeTab === 'customers'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          <Users size={20} />
-          Customers
-        </button>
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
-            activeTab === 'settings'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          ⚙️ Settings
-        </button>
-      </div>
 
-      <div className="p-6">
-        {activeTab === 'sale' && <SaleForm />}
-        {activeTab === 'inventory' && <InventoryManager />}
-        {activeTab === 'offers' && <OfferBroadcast />}
-        {activeTab === 'customers' && <CustomersList />}
-        {activeTab === 'settings' && <Settings />}
-      </div>
-    </div>
-  </div>
-</div>
-);
+  // ===== MAIN RETURN WITH CONDITIONAL RENDERING =====
+  return (
+    <>
+      {currentView === 'landing' && <LandingPage />}
+      {currentView === 'login' && <AuthPage mode="login" />}
+      {currentView === 'signup' && <AuthPage mode="signup" />}
+      {currentView === 'app' && (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">{n8nConfig.shopName}</h1>
+                  <p className="text-gray-600">Phone Shop Management System</p>
+                  {currentUser && (
+                    <p className="text-sm text-blue-600 mt-1">Welcome, {currentUser.fullName || currentUser.email}</p>
+                  )}
+                </div>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <Lock size={16} />
+                  Logout
+                </button>
+              </div>
+              {!n8nConfig.webhookUrl && (
+                <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded p-3">
+                  <p className="text-sm text-yellow-800">⚠️ Please configure your n8n webhook URL in Settings</p>
+                </div>
+              )}
+            </div>
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+              <div className="flex border-b overflow-x-auto">
+                <button
+                  onClick={() => setActiveTab('sale')}
+                  className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
+                    activeTab === 'sale' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Phone size={20} />
+                  New Sale
+                </button>
+                <button
+                  onClick={() => setActiveTab('inventory')}
+                  className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
+                    activeTab === 'inventory' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Package size={20} />
+                  Inventory
+                </button>
+                <button
+                  onClick={() => setActiveTab('offers')}
+                  className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
+                    activeTab === 'offers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <MessageSquare size={20} />
+                  Offers
+                </button>
+                <button
+                  onClick={() => setActiveTab('customers')}
+                  className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
+                    activeTab === 'customers' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Users size={20} />
+                  Customers
+                </button>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
+                    activeTab === 'settings' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  ⚙️ Settings
+                </button>
+              </div>
+
+              <div className="p-6">
+                {activeTab === 'sale' && <SaleForm />}
+                {activeTab === 'inventory' && <InventoryManager />}
+                {activeTab === 'offers' && <OfferBroadcast />}
+                {activeTab === 'customers' && <CustomersList />}
+                {activeTab === 'settings' && <Settings />}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 };
+
 export default PhoneShopManager;
