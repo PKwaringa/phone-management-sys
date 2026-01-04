@@ -503,16 +503,7 @@ const PhoneShopManager = () => {
           </div>
         )}
 
-        {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">💡 How Inventory Works</h3>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>✅ <strong>Add Stock:</strong> Increases inventory when new phones arrive</li>
-            <li>✅ <strong>Record Sale:</strong> Decreases inventory (or use "New Sale" tab for full workflow)</li>
-            <li>✅ <strong>New Product:</strong> Adds a new phone model to your catalog</li>
-            <li>✅ <strong>Auto Alerts:</strong> n8n sends alerts when stock is low</li>
-            <li>✅ <strong>Sales Integration:</strong> Sales from "New Sale" automatically update inventory</li>
-          </ul>
-        </div> */}
+        
       </div>
     );
   };
@@ -740,43 +731,164 @@ const PhoneShopManager = () => {
     );
   };
 
-  const CustomersList = () => {
+ const CustomersList = () => {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchType, setSearchType] = useState('name');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchStatus, setSearchStatus] = useState({ type: '', message: '' });
+
+    const handleSearch = async () => {
+      if (!searchQuery.trim()) {
+        setSearchStatus({ type: 'error', message: 'Please enter a search term' });
+        return;
+      }
+
+      if (!n8nConfig.webhookUrl) {
+        setSearchStatus({ type: 'error', message: 'Please configure n8n webhook URL in Settings' });
+        return;
+      }
+
+      setIsSearching(true);
+      setSearchStatus({ type: '', message: '' });
+      setSearchResults([]);
+
+      try {
+        const searchData = {
+          action: 'search_customer',
+          timestamp: new Date().toISOString(),
+          search: {
+            query: searchQuery,
+            type: searchType
+          }
+        };
+
+        const response = await fetch(n8nConfig.webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(searchData)
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.customers && result.customers.length > 0) {
+            setSearchResults(result.customers);
+            setSearchStatus({ type: 'success', message: `Found ${result.customers.length} customer(s)` });
+          } else {
+            setSearchStatus({ type: 'info', message: 'No customers found matching your search' });
+          }
+        } else {
+          setSearchStatus({ type: 'error', message: 'Search failed. Please check your n8n webhook configuration.' });
+        }
+      } catch (error) {
+        setSearchStatus({ type: 'error', message: `Error: ${error.message}` });
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter') {
+        handleSearch();
+      }
+    };
+
     return (
       <div className="space-y-4">
         <h2 className="text-2xl font-bold text-gray-800">Customer Records</h2>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-          <Users size={48} className="mx-auto text-blue-600 mb-3" />
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Customer Data Managed by n8n</h3>
-          <p className="text-sm text-gray-700 mb-4">
-            All customer records, sales history, and analytics are stored and managed by your n8n workflow.
-          </p>
-          <div className="text-left bg-white rounded-lg p-4 space-y-2">
-            <p className="text-sm text-gray-700">✅ Stored in Google Sheets / Database</p>
-            <p className="text-sm text-gray-700">✅ Automated follow-ups & birthday wishes</p>
-            <p className="text-sm text-gray-700">✅ Purchase history tracking</p>
-            <p className="text-sm text-gray-700">✅ Customer segmentation & analytics</p>
+        <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          <h3 className="font-semibold text-gray-800">Search Customers</h3>
+          
+          <div className="flex gap-2">
+            <select
+              value={searchType}
+              onChange={(e) => setSearchType(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isSearching}
+            >
+              <option value="name">Name</option>
+              <option value="phone">Phone Number</option>
+              <option value="model">Phone Model</option>
+              <option value="nationalId">National ID</option>
+              <option value="date">Purchase Date</option>
+            </select>
+
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder={`Search by ${searchType === 'name' ? 'customer name' : searchType === 'phone' ? 'phone number' : searchType === 'model' ? 'phone model' : searchType === 'nationalId' ? 'national ID' : 'date (YYYY-MM-DD)'}`}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isSearching}
+            />
+
+            <button
+              onClick={handleSearch}
+              disabled={isSearching}
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isSearching ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                'Search'
+              )}
+            </button>
           </div>
+
+          {searchStatus.message && (
+            <div className={`p-3 rounded-lg flex items-start gap-2 text-sm ${
+              searchStatus.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+              searchStatus.type === 'info' ? 'bg-blue-50 border border-blue-200 text-blue-800' :
+              'bg-red-50 border border-red-200 text-red-800'
+            }`}>
+              {searchStatus.type === 'success' ? <CheckCircle size={18} className="flex-shrink-0 mt-0.5" /> :
+               searchStatus.type === 'info' ? <AlertCircle size={18} className="flex-shrink-0 mt-0.5" /> :
+               <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />}
+              <span>{searchStatus.message}</span>
+            </div>
+          )}
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-3">Access Your Data:</h3>
-          <div className="space-y-2">
-            <a 
-              href="https://docs.google.com/spreadsheets" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="block px-4 py-3 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
-            >
-              <p className="font-medium text-green-800">📊 View in Google Sheets</p>
-              <p className="text-sm text-gray-600">Access your customer database</p>
-            </a>
-            <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <p className="font-medium text-gray-800">🔧 n8n Workflow Dashboard</p>
-              <p className="text-sm text-gray-600">Configure in your n8n instance</p>
+        {searchResults.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Customer Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Phone Number</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Phone Model</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">National ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {searchResults.map((customer, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">{customer.customerName || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{customer.phoneNumber || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{customer.phoneBought || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{customer.nationalId || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {customer.amount ? `KES ${customer.amount.toLocaleString()}` : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {customer.date ? new Date(customer.date).toLocaleDateString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        )}
+        
       </div>
     );
   };
@@ -924,21 +1036,7 @@ const PhoneShopManager = () => {
         <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
           <h3 className="font-semibold text-gray-800 mb-3">Expected Webhook Payload</h3>
           <pre className="bg-white p-4 rounded border border-gray-300 overflow-x-auto text-xs">
-{`{
-  "action": "new_sale | add_inventory | broadcast_offer",
-  "timestamp": "2024-12-13T10:30:00Z",
-  "sale": {
-    "customerName": "John Doe",
-    "phoneNumber": "+254712345678",
-    "phoneBought": "iPhone 13 Pro",
-    "amount": 50000,
-    "paymentMethod": "mpesa"
-  },
-  "shop": {
-    "name": "Tech Mobile Store",
-    "location": "Murang'a, Kenya"
-  }
-}`}
+
           </pre>
         </div>
       </div>
@@ -947,13 +1045,13 @@ const PhoneShopManager = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-<div className="max-w-4xl mx-auto">
-<div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-<h1 className="text-3xl font-bold text-gray-800 mb-2">{n8nConfig.shopName}</h1>
-<p className="text-gray-600">Phone Shop Management System</p>
-{!n8nConfig.webhookUrl && (
-<div className="mt-3 bg-yellow-50 border border-yellow-200 rounded p-3">
-<p className="text-sm text-yellow-800">⚠️ Please configure your n8n webhook URL in Settings</p>
+      <div className="max-w-4xl mx-auto">
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <h1 className="text-3xl font-bold text-gray-800 mb-2">{n8nConfig.shopName}</h1>
+      <p className="text-gray-600">Phone Shop Management System</p>
+      {!n8nConfig.webhookUrl && (
+      <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded p-3">
+      <p className="text-sm text-yellow-800">⚠️ Please configure your n8n webhook URL in Settings</p>
 </div>
 )}
 </div>
